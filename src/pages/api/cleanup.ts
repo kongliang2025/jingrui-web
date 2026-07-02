@@ -1,32 +1,12 @@
 import type { APIRoute } from 'astro';
-import { MongoClient, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import type { Evidence } from '../../lib/types';
-
-// 数据库连接配置
-const MONGODB_URI = import.meta.env.MONGODB_URI || process.env.MONGODB_URI;
-const DB_NAME = import.meta.env.DB_NAME || process.env.DB_NAME || 'property-evidence';
-
-let client: MongoClient | null = null;
-
-async function getDb() {
-  if (!client) {
-    if (!MONGODB_URI) {
-      throw new Error('未配置 MONGODB_URI 环境变量，请在 .env 文件中设置');
-    }
-    
-    console.log('正在连接 MongoDB...');
-    client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    console.log('MongoDB 连接成功！');
-  }
-  
-  return client.db(DB_NAME);
-}
+import { getDatabase } from '../../lib/mongodb';
 
 // 清理不符合规则的数据
 export const POST: APIRoute = async ({ request }) => {
   try {
-    const db = await getDb();
+    const db = await getDatabase();
     const collection = db.collection<Evidence>('evidences');
 
     // 获取所有数据
