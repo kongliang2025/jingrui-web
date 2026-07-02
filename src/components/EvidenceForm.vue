@@ -9,7 +9,7 @@
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <!-- <h1 class="text-3xl font-bold text-gray-900 mb-2">物业证据收集</h1> -->
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">物业证据收集</h1>
         <p class="text-gray-600">记录物业服务问题，维护业主合法权益</p>
       </div>
 
@@ -31,7 +31,7 @@
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2">
                 <span class="text-gray-600 font-medium">共</span>
-                <span class="text-primary-600 font-bold text-lg">{{ submissions.length }}</span>
+                <span class="text-primary-600 font-bold text-lg">{{ totalItems }}</span>
                 <span class="text-gray-600">条记录</span>
               </div>
               <button
@@ -66,7 +66,7 @@
                 <div
                   v-for="item in submissions"
                   :key="item._id"
-                  class="p-4 sm:p-6 hover:bg-gray-50 transition-colors cursor-pointer"
+                  class="group p-4 sm:p-6 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   <div class="flex items-start space-x-4">
                     <!-- 房号标识 -->
@@ -78,7 +78,18 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center justify-between mb-2">
                         <span class="font-semibold text-gray-900">{{ item.roomNumber }}</span>
-                        <span class="text-xs text-gray-400">{{ formatDate(item.createdAt) }}</span>
+                        <div class="flex items-center space-x-2">
+                          <span class="text-xs text-gray-400">{{ formatDate(item.createdAt) }}</span>
+                          <button
+                            @click.stop="deleteSubmission(item._id)"
+                            class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                            title="删除此记录"
+                          >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                       <p class="text-gray-600 text-sm line-clamp-2 mb-3">{{ item.description }}</p>
                       <div class="flex items-center space-x-4 text-xs text-gray-500">
@@ -98,23 +109,52 @@
                         </span>
                       </div>
                     </div>
-
-                    <!-- 状态标签 -->
-                    <div class="flex-shrink-0">
-                      <span 
-                        :class="[
-                          'px-3 py-1 rounded-full text-xs font-medium',
-                          item.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          item.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                          'bg-green-100 text-green-800'
-                        ]"
-                      >
-                        {{ statusText(item.status) }}
-                      </span>
-                    </div>
                   </div>
                 </div>
               </TransitionGroup>
+
+              <!-- 分页器 -->
+              <div v-if="totalPages > 1" class="p-4 bg-gray-50 border-t border-gray-100">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-gray-500">
+                    第 {{ currentPage }}/{{ totalPages }} 页，共 {{ totalItems }} 条
+                  </span>
+                  <div class="flex items-center space-x-2">
+                    <button
+                      @click="changePage(currentPage - 1)"
+                      :disabled="currentPage === 1"
+                      class="px-3 py-1.5 text-sm rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      :class="currentPage === 1 ? 'border-gray-200 bg-gray-50 text-gray-400' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'"
+                    >
+                      上一页
+                    </button>
+                    <template v-for="page in totalPages" :key="page">
+                      <button
+                        v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
+                        @click="changePage(page)"
+                        class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                        :class="page === currentPage ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'"
+                      >
+                        {{ page }}
+                      </button>
+                      <span
+                        v-else-if="page === currentPage - 2 || page === currentPage + 2"
+                        class="px-2 text-gray-400"
+                      >
+                        ...
+                      </span>
+                    </template>
+                    <button
+                      @click="changePage(currentPage + 1)"
+                      :disabled="currentPage === totalPages"
+                      class="px-3 py-1.5 text-sm rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      :class="currentPage === totalPages ? 'border-gray-200 bg-gray-50 text-gray-400' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'"
+                    >
+                      下一页
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -147,9 +187,23 @@
                   v-model="formData.roomNumber"
                   type="text"
                   required
-                  placeholder="例如：1栋2单元301室"
-                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 outline-none"
+                  placeholder="例如：1-2-301"
+                  :class="[
+                    'w-full px-4 py-3 border rounded-lg focus:ring-2 transition-all duration-200 outline-none',
+                    roomNumberError 
+                      ? 'border-red-500 focus:ring-red-200 focus:border-red-500' 
+                      : 'border-gray-300 focus:ring-primary-500 focus:border-transparent'
+                  ]"
+                  @blur="validateRoomNumber"
+                  @input="roomNumberError = ''"
                 />
+                <p v-if="roomNumberError" class="mt-1 text-xs text-red-500 flex items-center">
+                  <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  {{ roomNumberError }}
+                </p>
+                <p v-else class="mt-1 text-xs text-gray-400">只支持数字和横杠（如：1-2-301）</p>
               </div>
 
               <!-- 联系方式 -->
@@ -162,9 +216,23 @@
                   v-model="formData.contact"
                   type="tel"
                   required
-                  placeholder="请输入手机号码或微信号"
-                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 outline-none"
+                  placeholder="请输入11位手机号码"
+                  :class="[
+                    'w-full px-4 py-3 border rounded-lg focus:ring-2 transition-all duration-200 outline-none',
+                    contactError 
+                      ? 'border-red-500 focus:ring-red-200 focus:border-red-500' 
+                      : 'border-gray-300 focus:ring-primary-500 focus:border-transparent'
+                  ]"
+                  @blur="validateContact"
+                  @input="contactError = ''"
                 />
+                <p v-if="contactError" class="mt-1 text-xs text-red-500 flex items-center">
+                  <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  {{ contactError }}
+                </p>
+                <p v-else class="mt-1 text-xs text-gray-400">支持中国大陆手机号码</p>
               </div>
 
               <!-- 问题描述 -->
@@ -319,8 +387,16 @@ const showSuccessToast = ref(false);
 const showErrorToast = ref(false);
 const errorMessage = ref('');
 const showForm = ref(false);
+const contactError = ref(''); // 手机号错误提示
+const roomNumberError = ref(''); // 房号错误提示
 
-// 从数据库获取的数据列表
+// 分页相关
+const currentPage = ref(1);
+const pageSize = 10;
+const totalItems = ref(0);
+const totalPages = ref(0);
+
+// 从数据库获取的数据列表（当前页）
 const submissions = ref<Submission[]>([]);
 
 const formData = reactive({
@@ -331,16 +407,63 @@ const formData = reactive({
   agreedToDeclaration: false,
 });
 
+// 验证手机号格式
+const validateContact = (): boolean => {
+  const contact = formData.contact.trim();
+  
+  if (!contact) {
+    contactError.value = '请输入联系方式';
+    return false;
+  }
+  
+  // 中国大陆手机号验证：1开头，第二位3-9，共11位数字
+  const phoneRegex = /^1[3-9]\d{9}$/;
+  
+  if (!phoneRegex.test(contact)) {
+    contactError.value = '请输入正确的11位手机号码（如：13800138000）';
+    return false;
+  }
+  
+  contactError.value = '';
+  return true;
+};
+
+// 验证房号格式（只允许数字和横杠）
+const validateRoomNumber = (): boolean => {
+  const roomNumber = formData.roomNumber.trim();
+  
+  if (!roomNumber) {
+    roomNumberError.value = '请输入房号';
+    return false;
+  }
+  
+  // 只允许数字和横杠
+  const roomRegex = /^[0-9-]+$/;
+  
+  if (!roomRegex.test(roomNumber)) {
+    roomNumberError.value = '房号只能包含数字和横杠（-）';
+    return false;
+  }
+  
+  if (roomNumber.length < 2) {
+    roomNumberError.value = '房号长度不能少于2个字符';
+    return false;
+  }
+  
+  roomNumberError.value = '';
+  return true;
+};
+
 // 组件挂载时获取数据
 onMounted(async () => {
   await fetchSubmissions();
 });
 
-// 从 API 获取证据列表
-async function fetchSubmissions() {
+// 从 API 获取证据列表（支持分页）
+async function fetchSubmissions(page = 1) {
   try {
     isLoading.value = true;
-    const response = await fetch('/api/evidence');
+    const response = await fetch(`/api/evidence?page=${page}&limit=${pageSize}`);
     
     // 检查响应状态
     if (!response.ok) {
@@ -356,16 +479,18 @@ async function fetchSubmissions() {
         ...item,
         _id: item._id?.toString() || item.id || ''
       }));
+      // 更新分页信息
+      if (result.pagination) {
+        totalItems.value = result.pagination.total;
+        totalPages.value = result.pagination.pages;
+        currentPage.value = result.pagination.page;
+      }
     } else {
       submissions.value = [];
     }
   } catch (error) {
     console.error('获取数据失败:', error);
     submissions.value = []; // 出错时设为空数组，不阻塞界面
-    // 首次加载时不显示错误提示（避免用户刚进来就看到错误）
-    if (submissions.value.length === 0 && !isLoading.value) {
-      showToast('获取数据失败', true);
-    }
   } finally {
     isLoading.value = false;
   }
@@ -432,6 +557,41 @@ const removeImage = (index: number) => {
   formData.images.splice(index, 1);
 };
 
+// 切换页码
+const changePage = (page: number) => {
+  if (page < 1 || page > totalPages.value) return;
+  fetchSubmissions(page);
+};
+
+// 删除记录
+const deleteSubmission = async (id: string) => {
+  if (!confirm('确定要删除这条记录吗？此操作不可恢复。')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/evidence?id=${id}`, { method: 'DELETE' });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      showToast(errorData.error || '删除失败', true);
+      return;
+    }
+
+    const result = await response.json();
+    if (result.success) {
+      showToast('删除成功');
+      // 重新加载当前页
+      await fetchSubmissions(currentPage.value);
+    } else {
+      showToast(result.error || '删除失败', true);
+    }
+  } catch (error) {
+    console.error('删除失败:', error);
+    showToast('删除失败，请重试', true);
+  }
+};
+
 // 手机号脱敏处理
 const maskContact = (contact: string): string => {
   if (/^\d{11}$/.test(contact)) {
@@ -456,7 +616,7 @@ const formatDate = (dateStr: Date | string): string => {
   });
 };
 
-// 状态文本映射
+// 状态文本映射（保留但不再使用）
 const statusText = (status: string): string => {
   const map: Record<string, string> = {
     pending: '待处理',
@@ -494,12 +654,27 @@ const cancelForm = () => {
   formData.images = [];
   formData.agreedToDeclaration = false;
   
+  // 重置验证状态
+  roomNumberError.value = '';
+  contactError.value = '';
+  
   showForm.value = false;
 };
 
 const handleSubmit = async () => {
+  // 验证真实性声明
   if (!formData.agreedToDeclaration) {
     alert('请先阅读并同意真实性承诺');
+    return;
+  }
+  
+  // 验证房号
+  if (!validateRoomNumber()) {
+    return;
+  }
+  
+  // 验证手机号
+  if (!validateContact()) {
     return;
   }
 

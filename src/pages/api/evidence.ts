@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import type { Evidence } from '../../lib/types';
 
 // 数据库连接配置
@@ -30,13 +30,9 @@ export const GET: APIRoute = async ({ url }) => {
     const collection = db.collection<Evidence>('evidences');
     
     const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '20');
-    const status = url.searchParams.get('status');
+    const limit = parseInt(url.searchParams.get('limit') || '10');
 
     const query: Record<string, unknown> = {};
-    if (status) {
-      query.status = status;
-    }
 
     const skip = (page - 1) * limit;
     
@@ -53,6 +49,45 @@ export const GET: APIRoute = async ({ url }) => {
 
   } catch (error: any) {
     console.error('获取证据列表失败:', error?.message || error);
+    return Response.json({
+      success: false,
+      error: error?.message || '服务器内部错误'
+    }, { status: 500 });
+  }
+};
+
+// DELETE - 删除证据
+export const DELETE: APIRoute = async ({ request }) => {
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get('id');
+
+    if (!id) {
+      return Response.json({
+        success: false,
+        error: '缺少记录ID'
+      }, { status: 400 });
+    }
+
+    const db = await getDb();
+    const collection = db.collection<Evidence>('evidences');
+
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return Response.json({
+        success: false,
+        error: '记录不存在或已删除'
+      }, { status: 404 });
+    }
+
+    return Response.json({
+      success: true,
+      message: '删除成功'
+    });
+
+  } catch (error: any) {
+    console.error('删除证据失败:', error?.message || error);
     return Response.json({
       success: false,
       error: error?.message || '服务器内部错误'
