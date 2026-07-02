@@ -203,27 +203,33 @@
                       ×
                     </button>
                   </div>
-                  <button
-                    v-if="formData.images.length < 9"
-                    type="button"
-                    @click="triggerUpload"
-                    class="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-primary-500 hover:border-primary-500 transition-colors cursor-pointer"
-                  >
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span class="text-xs mt-1">添加图片</span>
-                  </button>
-                </div>
-                <input
-                  ref="fileInput"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  @change="handleFileChange"
-                  class="hidden"
-                />
+              <!-- 上传按钮 -->
+              <button
+                v-if="formData.images.length < 9"
+                type="button"
+                @click="triggerUpload"
+                class="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-primary-500 hover:border-primary-500 transition-colors cursor-pointer group-hover:border-primary-400"
+              >
+                <svg class="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 4v16m8-8H4" />
+                </svg>
+                <span class="text-xs">添加图片</span>
+                <span class="text-[10px] text-gray-400 mt-0.5">可多选</span>
+              </button>
+            </div>
+            <input
+              ref="fileInput"
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
+              multiple
+              :webkitdirectory="false"
+              @change="handleFileChange"
+              class="hidden"
+            />
+            <p class="mt-2 text-xs text-gray-400">
+              已选择 {{ formData.images.length }}/9 张（按住 Ctrl/Cmd 可多选）
+            </p>
               </div>
 
               <!-- 真实性声明 -->
@@ -335,17 +341,31 @@ async function fetchSubmissions() {
   try {
     isLoading.value = true;
     const response = await fetch('/api/evidence');
+    
+    // 检查响应状态
+    if (!response.ok) {
+      console.error('API 响应错误:', response.status, response.statusText);
+      submissions.value = [];
+      return;
+    }
+    
     const result = await response.json();
     
-    if (result.success) {
+    if (result && result.success && Array.isArray(result.data)) {
       submissions.value = result.data.map((item: any) => ({
         ...item,
-        _id: item._id.toString()
+        _id: item._id?.toString() || item.id || ''
       }));
+    } else {
+      submissions.value = [];
     }
   } catch (error) {
     console.error('获取数据失败:', error);
-    showToast('获取数据失败', true);
+    submissions.value = []; // 出错时设为空数组，不阻塞界面
+    // 首次加载时不显示错误提示（避免用户刚进来就看到错误）
+    if (submissions.value.length === 0 && !isLoading.value) {
+      showToast('获取数据失败', true);
+    }
   } finally {
     isLoading.value = false;
   }
@@ -359,18 +379,50 @@ const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement;
   const files = target.files;
   
-  if (files) {
+  if (files && files.length > 0) {
     const remainingSlots = 9 - formData.images.length;
-    const filesToAdd = Array.from(files).slice(0, remainingSlots);
     
+    // 过滤有效图片文件
+    const validFiles = Array.from(files).filter(file => 
+      file.type.startsWith('image/') || 
+      file.name.match(/\.(jpg|jpeg|png|gif|webp|heic|heif)$/i)
+    );
+    
+    // 限制数量
+    const filesToAdd = validFiles.slice(0, remainingSlots);
+    
+    if (filesToAdd.length === 0) {
+      showToast('请选择有效的图片文件', true);
+      return;
+    }
+    
+    // 添加图片到列表
+    let addedCount = 0;
     filesToAdd.forEach(file => {
-      if (file.type.startsWith('image/')) {
+      try {
         const preview = URL.createObjectURL(file);
         formData.images.push({ file, preview });
+        addedCount++;
+      } catch (error) {
+        console.error('创建预览失败:', error);
       }
     });
+    
+    // 提示信息
+    if (addedCount > 0) {
+      const msg = remainingSlots < validFiles.length 
+        ? `已添加 ${addedCount} 张图片（最多再选 ${9 - formData.images.length} 张）`
+        : `成功添加 ${addedCount} 张图片`;
+      showToast(msg);
+    }
+    
+    // 检查是否还有空间
+    if (formData.images.length >= 9) {
+      showToast('已达最大上传数量（9张）');
+    }
   }
   
+  // 重置 input 以允许重复选择相同文件
   if (target) target.value = '';
 };
 
@@ -457,9 +509,10 @@ const handleSubmit = async () => {
     // 将图片转为 base64（实际项目中建议上传到对象存储）
     const imageBase64List = await Promise.all(
       formData.images.map(async ({ file }) => {
-        return new Promise<string>((resolve) => {
+        return new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
           reader.readAsDataURL(file);
         });
       })
@@ -479,7 +532,35 @@ const handleSubmit = async () => {
       })
     });
 
-    const result = await response.json();
+    // 检查响应状态
+    if (!response.ok) {
+      // 尝试获取错误信息
+      const errorText = await response.text().catch(() => '');
+      let errorMsg = `服务器错误 (${response.status})`;
+      
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMsg = errorJson.error || errorMsg;
+      } catch (e) {
+        // 如果不是 JSON，使用原始文本或默认消息
+        if (errorText) {
+          errorMsg = errorText.slice(0, 200);
+        }
+      }
+      
+      showToast(errorMsg, true);
+      return;
+    }
+
+    // 安全解析 JSON
+    let result;
+    try {
+      result = await response.json();
+    } catch (jsonError) {
+      console.error('JSON 解析失败:', jsonError);
+      showToast('服务器返回数据格式错误', true);
+      return;
+    }
 
     if (result.success) {
       // 显示成功提示

@@ -4,5 +4,5 @@ import tailwind from '@astrojs/tailwind';
 
 export default defineConfig({
   integrations: [vue(), tailwind()],
-  output: 'static',
+  output: 'server', // 使用 SSR 模式以支持 API 路由
 });
